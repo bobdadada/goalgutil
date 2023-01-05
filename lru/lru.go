@@ -1,3 +1,24 @@
+package lru
+
+import (
+	"container/list"
+)
+
+type Key any
+
+type entry struct {
+	key   Key
+	value any
+}
+
+type Cache interface {
+	Add(k Key, v any)
+	Get(k Key) (v any, ok bool)
+	Remove(k Key)
+	Len() int
+	Clear()
+}
+
 // LRU (Least recently used) 算法根据数据的历史访问记录来进行淘汰数据，
 // 其核心思想是“如果数据最近被访问过，那么将来被访问的几率也更高”。
 //
@@ -11,19 +32,6 @@
 // 代价：
 // 命中时需要遍历链表，找到命中的数据块索引，然后需要将数据移到头部。
 //
-
-package lru
-
-import (
-	"container/list"
-)
-
-type Key any
-
-type entry struct {
-	key   Key
-	value any
-}
 
 type LRU struct {
 	MaxEntries int
