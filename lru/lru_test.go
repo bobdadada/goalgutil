@@ -31,7 +31,7 @@ func TestLRUGet(t *testing.T) {
 			complexStruct{1, simpleStruct{2, "three"}}, true},
 	}
 	for _, tt := range getTests {
-		lru, _ := lru.NewLRU(0)
+		lru := lru.NewLRU(0)
 		lru.Add(tt.keyToAdd, 1234)
 		val, ok := lru.Get(tt.keyToGet)
 		if ok != tt.expectedOk {
@@ -43,7 +43,7 @@ func TestLRUGet(t *testing.T) {
 }
 
 func TestLRURemove(t *testing.T) {
-	lru, _ := lru.NewLRU(0)
+	lru := lru.NewLRU(0)
 	lru.Add("myKey", 1234)
 	if val, ok := lru.Get("myKey"); !ok {
 		t.Fatal("TestLRURemove returned no match")
@@ -75,7 +75,7 @@ func TestLRUKGet(t *testing.T) {
 			complexStruct{1, simpleStruct{2, "three"}}, true},
 	}
 	for _, tt := range getTests {
-		lruk, _ := lru.NewLRUK(0, tt.k)
+		lruk := lru.NewLRUK(0, tt.k)
 		for i := 0; i < tt.count; i++ {
 			lruk.Add(tt.keyToAdd, 1234)
 		}
@@ -89,7 +89,7 @@ func TestLRUKGet(t *testing.T) {
 }
 
 func TestLRUKRemove(t *testing.T) {
-	lruk, _ := lru.NewLRUK(0, 1)
+	lruk := lru.NewLRUK(0, 1)
 	lruk.Add("myKey", 1234)
 	if val, ok := lruk.Get("myKey"); !ok {
 		t.Fatal("TestLRUKRemove returned no match")

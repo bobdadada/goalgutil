@@ -33,12 +33,12 @@ type LRU struct {
 
 // New creates a new Cache.
 // If maxEntries is zero, the cache has no limit.
-func NewLRU(maxEntries int) (*LRU, bool) {
+func NewLRU(maxEntries int) *LRU {
 	return &LRU{
 		MaxEntries: maxEntries,
 		ll:         list.New(),
 		cache:      make(map[Key]*list.Element),
-	}, true
+	}
 }
 
 // Add adds a value to the cache.
@@ -90,6 +90,11 @@ func (lru *LRU) Clear() {
 // LRU-K的主要目的是为了解决LRU算法“缓存污染”的问题，
 // 其核心思想是将“最近使用过1次”的判断标准扩展为“最近使用过K次”。
 //
+// LRU-K具有LRU的优点，同时能够避免LRU的缺点，实际应用中LRU-2是综合各种因素后最优的选择，
+// LRU-3或者更大的K值命中率会高，但适应性差，需要大量的数据访问才能将历史访问记录清除掉。
+// LRU-K具有LRU的优点，同时能够避免LRU的缺点，实际应用中LRU-2是综合各种因素后最优的选择，
+// LRU-3或者更大的K值命中率会高，但适应性差，需要大量的数据访问才能将历史访问记录清除掉。
+//
 // 命中率：
 // LRU-K降低了“缓存污染”带来的问题，命中率比LRU要高。
 //
@@ -111,9 +116,9 @@ type LRUK struct {
 
 // New creates a new Cache.
 // If maxEntries is zero, the cache has no limit.
-func NewLRUK(maxEntries, k int) (*LRUK, bool) {
+func NewLRUK(maxEntries, k int) *LRUK {
 	if k <= 0 {
-		return nil, false
+		panic("k must be larger than 0!")
 	}
 	return &LRUK{
 		MaxEntries: maxEntries,
@@ -121,7 +126,7 @@ func NewLRUK(maxEntries, k int) (*LRUK, bool) {
 		ll:         list.New(),
 		cache:      make(map[Key]*list.Element),
 		count:      make(map[Key]int),
-	}, true
+	}
 }
 
 // Add adds a value to the cache.
