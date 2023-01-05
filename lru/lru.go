@@ -27,8 +27,14 @@ type entry struct {
 
 type LRU struct {
 	MaxEntries int
-	ll         *list.List
-	cache      map[Key]*list.Element
+
+	// OnEvicted optionally specifies a callback function to be
+	// executed when an entry is purged from the cache.
+	OnEvicted func(key Key, value any)
+
+	ll *list.List
+
+	cache map[Key]*list.Element
 }
 
 // New creates a new Cache.
@@ -43,6 +49,12 @@ func NewLRU(maxEntries int) *LRU {
 
 // Add adds a value to the cache.
 func (lru *LRU) Add(k Key, v any) {
+	if lru.cache == nil {
+		// `make` may fail
+		lru.cache = make(map[Key]*list.Element)
+		lru.ll = list.New()
+	}
+
 	if ee, ok := lru.cache[k]; ok {
 		lru.ll.MoveToFront(ee)
 		ee.Value.(*entry).value = v
@@ -60,6 +72,10 @@ func (lru *LRU) Add(k Key, v any) {
 
 // Get looks up a key's value from the cache.
 func (lru *LRU) Get(k Key) (v any, ok bool) {
+	if lru.cache == nil {
+		return nil, false
+	}
+
 	if ee, hit := lru.cache[k]; hit {
 		lru.ll.MoveToFront(ee)
 		return ee.Value.(*entry).value, true
@@ -69,6 +85,10 @@ func (lru *LRU) Get(k Key) (v any, ok bool) {
 
 // Remove removes the provided key from the cache.
 func (lru *LRU) Remove(k Key) {
+	if lru.cache == nil {
+		return
+	}
+
 	if ee, hit := lru.cache[k]; hit {
 		lru.ll.Remove(ee)
 		delete(lru.cache, k)
@@ -77,13 +97,23 @@ func (lru *LRU) Remove(k Key) {
 
 // Len returns the number of items in the cache.
 func (lru *LRU) Len() int {
+	if lru.cache == nil {
+		return 0
+	}
+
 	return lru.ll.Len()
 }
 
 // Remove removes the provided key from the cache.
 func (lru *LRU) Clear() {
-	lru.ll = list.New()
-	lru.cache = make(map[Key]*list.Element)
+	if lru.OnEvicted != nil {
+		for _, e := range lru.cache {
+			kv := e.Value.(*entry)
+			lru.OnEvicted(kv.key, kv.value)
+		}
+	}
+	lru.ll = nil
+	lru.cache = nil
 }
 
 // LRU-K中的K代表最近使用的次数，因此LRU可以认为是LRU-1。
@@ -109,9 +139,15 @@ func (lru *LRU) Clear() {
 type LRUK struct {
 	MaxEntries int
 	K          int
-	ll         *list.List
-	cache      map[Key]*list.Element
-	count      map[Key]int
+
+	// OnEvicted optionally specifies a callback function to be
+	// executed when an entry is purged from the cache.
+	OnEvicted func(key Key, value any)
+
+	ll    *list.List
+	count map[Key]int
+
+	cache map[Key]*list.Element
 }
 
 // New creates a new Cache.
@@ -124,13 +160,19 @@ func NewLRUK(maxEntries, k int) *LRUK {
 		MaxEntries: maxEntries,
 		K:          k,
 		ll:         list.New(),
-		cache:      make(map[Key]*list.Element),
 		count:      make(map[Key]int),
+		cache:      make(map[Key]*list.Element),
 	}
 }
 
 // Add adds a value to the cache.
 func (lruk *LRUK) Add(k Key, v any) {
+	if lruk.cache == nil {
+		lruk.cache = make(map[Key]*list.Element)
+		lruk.ll = list.New()
+		lruk.count = make(map[Key]int)
+	}
+
 	if ee, ok := lruk.cache[k]; ok {
 		lruk.ll.MoveToFront(ee)
 		ee.Value.(*entry).value = v
@@ -159,6 +201,10 @@ func (lruk *LRUK) Add(k Key, v any) {
 
 // Get looks up a key's value from the cache.
 func (lruk *LRUK) Get(k Key) (v any, ok bool) {
+	if lruk.cache == nil {
+		return nil, false
+	}
+
 	if ee, hit := lruk.cache[k]; hit {
 		lruk.ll.MoveToFront(ee)
 		return ee.Value.(*entry).value, true
@@ -174,6 +220,10 @@ func (lruk *LRUK) Get(k Key) (v any, ok bool) {
 
 // Remove removes the provided key from the cache.
 func (lruk *LRUK) Remove(k Key) {
+	if lruk.cache == nil {
+		return
+	}
+
 	if ee, hit := lruk.cache[k]; hit {
 		lruk.ll.Remove(ee)
 		delete(lruk.cache, k)
@@ -182,12 +232,24 @@ func (lruk *LRUK) Remove(k Key) {
 
 // Len returns the number of items in the cache.
 func (lruk *LRUK) Len() int {
+	if lruk.cache == nil {
+		return 0
+	}
+
 	return lruk.ll.Len()
 }
 
 // Remove removes the provided key from the cache.
 func (lruk *LRUK) Clear() {
-	lruk.ll = list.New()
-	lruk.cache = make(map[Key]*list.Element)
-	lruk.count = make(map[Key]int)
+	if lruk.OnEvicted != nil {
+		for _, e := range lruk.cache {
+			kv := e.Value.(*entry)
+			lruk.OnEvicted(kv.key, kv.value)
+		}
+	}
+
+	lruk.ll = nil
+	lruk.count = nil
+
+	lruk.cache = nil
 }
