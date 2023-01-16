@@ -2,22 +2,9 @@ package lru
 
 import (
 	"container/list"
+
+	cm "goalgutil/macros/cache_macro"
 )
-
-type Key any
-
-type entry struct {
-	key   Key
-	value any
-}
-
-type Cache interface {
-	Add(k Key, v any)
-	Get(k Key) (v any, ok bool)
-	Remove(k Key)
-	Len() int
-	Clear()
-}
 
 // LRU (Least recently used) 算法根据数据的历史访问记录来进行淘汰数据，
 // 其核心思想是“如果数据最近被访问过，那么将来被访问的几率也更高”。
@@ -32,17 +19,21 @@ type Cache interface {
 // 代价：
 // 命中时需要遍历链表，找到命中的数据块索引，然后需要将数据移到头部。
 //
+// 作者：jiangmo
+// 链接：https://www.jianshu.com/p/d533d8a66795
+// 来源：简书
+// 著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+//
 
 type LRU struct {
 	MaxEntries int
 
 	// OnEvicted optionally specifies a callback function to be
 	// executed when an entry is purged from the cache.
-	OnEvicted func(key Key, value any)
+	OnEvicted func(k cm.Key, v cm.Value)
 
-	ll *list.List
-
-	cache map[Key]*list.Element
+	ll    *list.List
+	cache map[cm.Key]*list.Element
 }
 
 // New creates a new Cache.
@@ -51,48 +42,48 @@ func NewLRU(maxEntries int) *LRU {
 	return &LRU{
 		MaxEntries: maxEntries,
 		ll:         list.New(),
-		cache:      make(map[Key]*list.Element),
+		cache:      make(map[cm.Key]*list.Element),
 	}
 }
 
 // Add adds a value to the cache.
-func (lru *LRU) Add(k Key, v any) {
+func (lru *LRU) Add(k cm.Key, v cm.Value) {
 	if lru.cache == nil {
 		// `make` may fail
-		lru.cache = make(map[Key]*list.Element)
+		lru.cache = make(map[cm.Key]*list.Element)
 		lru.ll = list.New()
 	}
 
 	if ee, ok := lru.cache[k]; ok {
 		lru.ll.MoveToFront(ee)
-		ee.Value.(*entry).value = v
+		ee.Value.(*cm.Entry).V = v
 		return
 	}
 	if (lru.MaxEntries > 0) && (lru.ll.Len() == lru.MaxEntries) {
 		b := lru.ll.Back()
-		k := b.Value.(*entry).key
+		k := b.Value.(*cm.Entry).K
 		lru.ll.Remove(b)
 		delete(lru.cache, k)
 	}
-	ee := lru.ll.PushFront(&entry{k, v})
+	ee := lru.ll.PushFront(&cm.Entry{K: k, V: v})
 	lru.cache[k] = ee
 }
 
 // Get looks up a key's value from the cache.
-func (lru *LRU) Get(k Key) (v any, ok bool) {
+func (lru *LRU) Get(k cm.Key) (v any, ok bool) {
 	if lru.cache == nil {
 		return nil, false
 	}
 
 	if ee, hit := lru.cache[k]; hit {
 		lru.ll.MoveToFront(ee)
-		return ee.Value.(*entry).value, true
+		return ee.Value.(*cm.Entry).V, true
 	}
 	return nil, false
 }
 
 // Remove removes the provided key from the cache.
-func (lru *LRU) Remove(k Key) {
+func (lru *LRU) Remove(k cm.Key) {
 	if lru.cache == nil {
 		return
 	}
@@ -116,148 +107,10 @@ func (lru *LRU) Len() int {
 func (lru *LRU) Clear() {
 	if lru.OnEvicted != nil {
 		for _, e := range lru.cache {
-			kv := e.Value.(*entry)
-			lru.OnEvicted(kv.key, kv.value)
+			kv := e.Value.(*cm.Entry)
+			lru.OnEvicted(kv.K, kv.V)
 		}
 	}
 	lru.ll = nil
 	lru.cache = nil
-}
-
-// LRU-K中的K代表最近使用的次数，因此LRU可以认为是LRU-1。
-// LRU-K的主要目的是为了解决LRU算法“缓存污染”的问题，
-// 其核心思想是将“最近使用过1次”的判断标准扩展为“最近使用过K次”。
-//
-// LRU-K具有LRU的优点，同时能够避免LRU的缺点，实际应用中LRU-2是综合各种因素后最优的选择，
-// LRU-3或者更大的K值命中率会高，但适应性差，需要大量的数据访问才能将历史访问记录清除掉。
-// LRU-K具有LRU的优点，同时能够避免LRU的缺点，实际应用中LRU-2是综合各种因素后最优的选择，
-// LRU-3或者更大的K值命中率会高，但适应性差，需要大量的数据访问才能将历史访问记录清除掉。
-//
-// 命中率：
-// LRU-K降低了“缓存污染”带来的问题，命中率比LRU要高。
-//
-// 复杂度：
-// LRU-K降低了“缓存污染”带来的问题，命中率比LRU要高。
-//
-// 代价：
-// 由于LRU-K还需要记录那些被访问过、但还没有放入缓存的对象，
-// 因此内存消耗会比LRU要多；当数据量很大的时候，内存消耗会比较可观。
-//
-
-type LRUK struct {
-	MaxEntries int
-	K          int
-
-	// OnEvicted optionally specifies a callback function to be
-	// executed when an entry is purged from the cache.
-	OnEvicted func(key Key, value any)
-
-	ll    *list.List
-	count map[Key]int
-
-	cache map[Key]*list.Element
-}
-
-// New creates a new Cache.
-// If maxEntries is zero, the cache has no limit.
-func NewLRUK(maxEntries, k int) *LRUK {
-	if k <= 0 {
-		panic("k must be larger than 0!")
-	}
-	return &LRUK{
-		MaxEntries: maxEntries,
-		K:          k,
-		ll:         list.New(),
-		count:      make(map[Key]int),
-		cache:      make(map[Key]*list.Element),
-	}
-}
-
-// Add adds a value to the cache.
-func (lruk *LRUK) Add(k Key, v any) {
-	if lruk.cache == nil {
-		lruk.cache = make(map[Key]*list.Element)
-		lruk.ll = list.New()
-		lruk.count = make(map[Key]int)
-	}
-
-	if ee, ok := lruk.cache[k]; ok {
-		lruk.ll.MoveToFront(ee)
-		ee.Value.(*entry).value = v
-		return
-	}
-
-	if _, ok := lruk.count[k]; !ok {
-		lruk.count[k] = 0
-	}
-	lruk.count[k] += 1
-	if lruk.count[k] < lruk.K {
-		return
-	}
-
-	delete(lruk.count, k)
-
-	if (lruk.MaxEntries > 0) && (lruk.ll.Len() == lruk.MaxEntries) {
-		b := lruk.ll.Back()
-		k := b.Value.(*entry).key
-		lruk.ll.Remove(b)
-		delete(lruk.cache, k)
-	}
-	ee := lruk.ll.PushFront(&entry{k, v})
-	lruk.cache[k] = ee
-}
-
-// Get looks up a key's value from the cache.
-func (lruk *LRUK) Get(k Key) (v any, ok bool) {
-	if lruk.cache == nil {
-		return nil, false
-	}
-
-	if ee, hit := lruk.cache[k]; hit {
-		lruk.ll.MoveToFront(ee)
-		return ee.Value.(*entry).value, true
-	}
-
-	if _, ok := lruk.count[k]; !ok {
-		lruk.count[k] = 0
-	}
-	lruk.count[k] += 1
-
-	return nil, false
-}
-
-// Remove removes the provided key from the cache.
-func (lruk *LRUK) Remove(k Key) {
-	if lruk.cache == nil {
-		return
-	}
-
-	if ee, hit := lruk.cache[k]; hit {
-		lruk.ll.Remove(ee)
-		delete(lruk.cache, k)
-	}
-}
-
-// Len returns the number of items in the cache.
-func (lruk *LRUK) Len() int {
-	if lruk.cache == nil {
-		return 0
-	}
-
-	return lruk.ll.Len()
-}
-
-// Remove removes the provided key from the cache.
-func (lruk *LRUK) Clear() {
-	if lruk.OnEvicted != nil {
-		for _, e := range lruk.cache {
-			kv := e.Value.(*entry)
-			lruk.OnEvicted(kv.key, kv.value)
-		}
-	}
-
-	lruk.ll = nil
-	lruk.count = nil
-
-	lruk.cache = nil
 }
